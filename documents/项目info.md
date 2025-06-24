@@ -6,8 +6,8 @@ Port="8888"
 
 ```
 URL:Port
-	|--/transcription(长语音转写)
-	|--/textgenerate(文本生成)
+	|--/bluelm/transcription(长语音转写)
+	|--/bluelm/textgenerate(文本生成)
 	|--/bluelm/tts(音频生成)
 ```
 

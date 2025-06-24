@@ -50,7 +50,8 @@ func main() {
 			fmt.Println("调用蓝心大模型生成pcm切片失败")
 			return
 		}
-		downloadFilePath := "./file_io/download/download.wav"
+		fileName := time.Now().Format("20060102150405") + ".wav"
+		downloadFilePath := "./file_io/download/" + "temp_" + fileName
 		//将pcm切片转换为wav文件
 		err := PcmtoWav(res, downloadFilePath, 1, 16, 24000)
 		if err != nil {
@@ -59,23 +60,24 @@ func main() {
 		}
 		//返回wav文件
 		c.Header("Content-Type", "audio/wav")
-		c.Header("Content-Disposition", "attachment; filename=output.wav")
+		c.Header("Content-Disposition", "attachment; filename="+fileName)
 		c.File(downloadFilePath)
 	})
 
 	ginServer.POST("/bluelm/transcription", func(c *gin.Context) {
-		//上传文件
+		//获取上传文件
 		file, err := c.FormFile("file")
 		if err != nil {
 			c.String(http.StatusBadRequest, err.Error())
 			return
 		}
-		err = c.SaveUploadedFile(file, "./file_io/upload/upload.wav")
+		uploadFileName := time.Now().Format("20060102150405") + ".wav"
+		uploadFilePath := "./file_io/upload/" + "temp_" + uploadFileName
+		err = c.SaveUploadedFile(file, uploadFilePath)
 		if err != nil {
 			c.String(http.StatusInternalServerError, err.Error())
 			return
 		}
-		uploadFilePath := "./file_io/upload/upload.wav"
 		//调用蓝心大模型长语音转写
 		trans := app.NewTranscription(uploadFilePath)
 		e := trans.Upload()
@@ -113,7 +115,8 @@ func main() {
 			fmt.Println("JSON 编码错误:", err)
 			return
 		}
-		downloadFilePath := "./file_io/download/download.json"
+		downloadFileName := time.Now().Format("20060102150405") + ".json"
+		downloadFilePath := "./file_io/download/" + "temp_" + downloadFileName
 		//将json数据写入文件
 		err = os.WriteFile(downloadFilePath, jsonData, 0644)
 		if err != nil {
@@ -123,7 +126,7 @@ func main() {
 		fmt.Println("JSON 数据已写入文件:", downloadFilePath)
 		//返回json数据
 		c.Header("Content-Type", "application/json")
-		c.Header("Content-Disposition", "attachment; filename=download.json")
+		c.Header("Content-Disposition", "attachment; filename="+downloadFileName)
 		c.String(http.StatusOK, string(jsonData))
 	})
 	fmt.Println("服务启动成功")
