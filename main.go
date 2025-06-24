@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
-	"github.com/AimMetal-jy/AuraLab-backend/services"
+	"time"
 
+	. "github.com/AimMetal-jy/AuraLab-backend/services"
 	"github.com/dingdinglz/vivo"
 	"github.com/gin-gonic/gin"
 )
@@ -21,7 +23,7 @@ func main() {
 		var requestBody struct {
 			Mode string `json:"mode"`
 			Text string `json:"text"`
-			Vcn  string `json:"vcn,omitempty"`
+			Vcn  string `json:"vcn"`
 		}
 		requestBody.Mode = "TTS_MODE_HUMAN"
 		requestBody.Vcn = "M24"
@@ -31,15 +33,15 @@ func main() {
 			c.String(http.StatusBadRequest, err.Error())
 			return
 		}
-		switch requestBody.Mode{
-			case "TTS_MODE_SHORT":
-				requestBody.Mode = "short_audio_synthesis_jovi"
-			case "TTS_MODE_LONG":
-				requestBody.Mode = "long_audio_synthesis_screen"
-			case "TTS_MODE_HUMAN":
-				requestBody.Mode = "tts_humanoid_lam"
-			case "TTS_MODE_REPLICA":
-				requestBody.Mode = "tts_replica" // 音色复刻专用
+		switch requestBody.Mode {
+		case "short":
+			requestBody.Mode = "short_audio_synthesis_jovi"
+		case "long":
+			requestBody.Mode = "long_audio_synthesis_screen"
+		case "human":
+			requestBody.Mode = "tts_humanoid_lam"
+		case "replica":
+			requestBody.Mode = "tts_replica" // 音色复刻专用
 		}
 		//调用蓝心大模型生成pcm切片
 		res, e := app.TTS(requestBody.Mode, requestBody.Vcn, requestBody.Text)
@@ -48,9 +50,9 @@ func main() {
 			fmt.Println("调用蓝心大模型生成pcm切片失败")
 			return
 		}
-		outputFilePath := "output.wav"
+		downloadFilePath := "./file_io/download/download.wav"
 		//将pcm切片转换为wav文件
-		err := services.PcmtoWav(res, outputFilePath, 1, 16, 24000)
+		err := PcmtoWav(res, downloadFilePath, 1, 16, 24000)
 		if err != nil {
 			c.String(http.StatusInternalServerError, err.Error())
 			return
@@ -58,7 +60,71 @@ func main() {
 		//返回wav文件
 		c.Header("Content-Type", "audio/wav")
 		c.Header("Content-Disposition", "attachment; filename=output.wav")
-		c.File(outputFilePath)
+		c.File(downloadFilePath)
+	})
+
+	ginServer.POST("/bluelm/transcription", func(c *gin.Context) {
+		//上传文件
+		file, err := c.FormFile("file")
+		if err != nil {
+			c.String(http.StatusBadRequest, err.Error())
+			return
+		}
+		err = c.SaveUploadedFile(file, "./file_io/upload/upload.wav")
+		if err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+		uploadFilePath := "./file_io/upload/upload.wav"
+		//调用蓝心大模型长语音转写
+		trans := app.NewTranscription(uploadFilePath)
+		e := trans.Upload()
+		if e != nil {
+			c.String(http.StatusInternalServerError, e.Error())
+			return
+		}
+
+		e = trans.Start()
+		if e != nil {
+			fmt.Println(e.Error())
+			return
+		}
+		process := 0
+		for process != 100 {
+			time.Sleep(1 * time.Second)
+			// 查询任务进度
+			process, e = trans.GetTaskInfo()
+			if e != nil {
+				fmt.Println(e.Error())
+				return
+			}
+			fmt.Println("当前任务进度：", process, "%")
+		}
+		result, e := trans.GetResult()
+		if e != nil {
+			fmt.Println(e.Error())
+			return
+		}
+		// for _, value := range result {
+		// 	fmt.Println("开始秒数", value.Bg, "结束秒数", value.Ed, "内容：", value.Onebest)
+		// }
+		jsonData, err := json.Marshal(result)
+		if err != nil {
+			fmt.Println("JSON 编码错误:", err)
+			return
+		}
+		downloadFilePath := "./file_io/download/download.json"
+		//将json数据写入文件
+		err = os.WriteFile(downloadFilePath, jsonData, 0644)
+		if err != nil {
+			fmt.Println("写入文件失败：", err)
+			return
+		}
+		fmt.Println("JSON 数据已写入文件:", downloadFilePath)
+		//返回json数据
+		c.Header("Content-Type", "application/json")
+		c.Header("Content-Disposition", "attachment; filename=download.json")
+		c.String(http.StatusOK, string(jsonData))
 	})
 	fmt.Println("服务启动成功")
 	ginServer.Run(":8888")
