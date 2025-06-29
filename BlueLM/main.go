@@ -55,7 +55,7 @@ func main() {
 			return
 		}
 		fileName := time.Now().Format("20060102150405") + ".wav"
-		downloadFilePath := "./file_io/download/" + "temp_" + fileName
+		downloadFilePath := "../file_io/download/" + "temp_" + fileName
 		//将pcm切片转换为wav文件
 		err := PcmtoWav(res, downloadFilePath, 1, 16, 24000)
 		if err != nil {
@@ -76,7 +76,7 @@ func main() {
 			return
 		}
 		uploadFileName := time.Now().Format("20060102150405") + ".wav"
-		uploadFilePath := "./file_io/upload/" + "temp_" + uploadFileName
+		uploadFilePath := "../file_io/upload/" + "temp_" + uploadFileName
 		err = c.SaveUploadedFile(file, uploadFilePath)
 		if err != nil {
 			c.String(http.StatusInternalServerError, err.Error())
@@ -120,7 +120,7 @@ func main() {
 			return
 		}
 		downloadFileName := time.Now().Format("20060102150405") + ".json"
-		downloadFilePath := "./file_io/download/" + "temp_" + downloadFileName
+		downloadFilePath := "../file_io/download/" + "temp_" + downloadFileName
 		//将json数据写入文件
 		err = os.WriteFile(downloadFilePath, jsonData, 0644)
 		if err != nil {
@@ -148,7 +148,7 @@ func main() {
 
 		// 保存上传的文件到临时目录
 		uploadFileName := time.Now().Format("20060102150405") + "_" + file.Filename
-		uploadFilePath := "./file_io/upload/temp_" + uploadFileName
+		uploadFilePath := "../file_io/upload/temp_" + uploadFileName
 		err = c.SaveUploadedFile(file, uploadFilePath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
