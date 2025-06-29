@@ -1,0 +1,13 @@
+server:
+  port: ":8888"
+
+vivo_ai:
+  app_id: "YOUR_VIVO_APP_ID" # 请替换为你的 Vivo App ID
+  app_key: "YOUR_VIVO_APP_KEY" # 请替换为你的 Vivo App Key
+
+file_paths:
+  upload_dir: "../file_io/upload/"
+  download_dir: "../file_io/download/"
+
+whisperx:
+  url: "http://localhost:5000"

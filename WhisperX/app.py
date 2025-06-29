@@ -264,6 +264,29 @@ def too_large(e):
         'message': 'File too large. Maximum size is 100MB.'
     }), 413
 
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({
+        'success': False,
+        'message': 'Endpoint not found'
+    }), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({
+        'success': False,
+        'message': 'Internal server error',
+        'error': str(e)
+    }), 500
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    return jsonify({
+        'success': False,
+        'message': 'An unexpected error occurred',
+        'error': str(e)
+    }), 500
+
 if __name__ == '__main__':
     print("Starting WhisperX Flask service...")
     print(f"Upload folder: {UPLOAD_FOLDER}")

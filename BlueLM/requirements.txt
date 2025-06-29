@@ -1,5 +1,0 @@
-transformers
-gradio
-torch
-whisperx
-

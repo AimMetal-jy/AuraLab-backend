@@ -1,11 +1,10 @@
-package services
+package utils
 
 import (
 	"encoding/binary"
 	"fmt"
 	"os"
 )
-
 
 func PcmtoWav(pcmData []byte, filename string, channels, bitsPerSample, sampleRate int) error {
 	if bitsPerSample%8 != 0 {

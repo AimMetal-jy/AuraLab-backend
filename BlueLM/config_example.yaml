@@ -1,0 +1,22 @@
+server:
+  port: ":8888"
+
+vivo_ai:
+  app_id: "YOUR_VIVO_APP_ID" # 请替换为你的 Vivo App ID
+  app_key: "YOUR_VIVO_APP_KEY" # 请替换为你的 Vivo App Key
+  # 示例:
+  # app_id: "12345678"
+  # app_key: "abcdef1234567890abcdef1234567890"
+
+file_paths:
+  upload_dir: "../file_io/upload/"
+  download_dir: "../file_io/download/"
+
+whisperx:
+  url: "http://localhost:5000"
+
+# 配置说明:
+# 1. vivo_ai 部分需要配置真实的 Vivo AI 服务凭据
+# 2. 如果没有 Vivo AI 凭据，TTS 功能将无法正常工作
+# 3. 请确保 file_paths 中的目录存在且有读写权限
+# 4. whisperx.url 应指向运行中的 WhisperX 服务

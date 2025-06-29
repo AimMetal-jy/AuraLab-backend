@@ -39,10 +39,15 @@ AuraLab Backend 包含两个核心服务：
 # HuggingFace Token (用于 WhisperX 模型下载)
 HF_WHISPERX=your_huggingface_token_here
 
-# 蓝心大模型配置
-APPID=your_vivogpt_app_id_here
-APPKEY=your_vivogpt_app_key_here
+# 蓝心大模型配置（优先级：环境变量 > config.yaml）
+APPID=your_vivo_app_id_here
+APPKEY=your_vivo_app_key_here
 ```
+
+**配置优先级说明：**
+- 系统会优先使用环境变量 `APPID` 和 `APPKEY`
+- 如果环境变量不存在，则回退到 `config.yaml` 文件中的配置
+- 如果两者都没有配置，服务将启动失败并报错
 
 ## 安装步骤
 
@@ -85,19 +90,199 @@ start_go.bat
 
 ### 统一接口 (Go 服务 @ 8888)
 
-- `POST /bluelm/tts`: 文本转语音
-- `POST /bluelm/transcription`: 语音转文本
-- `POST /bluelm/chat`: 对话
-- `POST /whisperx`: WhisperX 语音处理 (内部调用 Flask 服务)
+#### 1. 文本转语音 (TTS)
+**接口：** `POST /bluelm/tts`
+
+**请求示例：**
+```bash
+curl -X POST http://localhost:8888/bluelm/tts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "human",
+    "text": "你好，这是蓝心大模型的音频生成功能。",
+    "vcn": "M24"
+  }' \
+  --output output.wav
+```
+
+**请求参数：**
+- `mode`: 合成模式 (short/long/human/replica)
+- `text`: 要转换的文本
+- `vcn`: 音色选择 (M24等)
+
+**响应：** 直接返回WAV音频文件流
+
+#### 2. 语音转文本 (ASR)
+**接口：** `POST /bluelm/transcription`
+
+**请求示例：**
+```bash
+curl -X POST http://localhost:8888/bluelm/transcription \
+  -F "file=@audio.wav"
+```
+
+**响应：**
+```json
+{
+  "task_id": "generated_task_id_string"
+}
+```
+
+**说明：** 异步处理，结果自动保存到下载目录
+
+#### 3. AI对话
+**接口：** `POST /bluelm/chat`
+
+**请求示例：**
+```bash
+curl -X POST http://localhost:8888/bluelm/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "你好，请介绍一下自己",
+    "session_id": "optional_session_id",
+    "history_messages": []
+  }'
+```
+
+**响应：**
+```json
+{
+  "success": true,
+  "message": "Chat completed successfully",
+  "timestamp": "2024-01-01 12:00:00",
+  "session_id": "generated_session_id",
+  "data": {
+    "reply": "AI回复内容",
+    "role": "assistant",
+    "messages": []
+  }
+}
+```
+
+#### 4. WhisperX语音处理 (代理接口)
+**接口：** `POST /whisperx`
+
+**请求示例：**
+```bash
+curl -X POST http://localhost:8888/whisperx \
+  -F "file=@audio.wav"
+```
+
+**响应：**
+```json
+{
+  "task_id": "uuid_generated_task_id"
+}
+```
+
+**说明：** 代理到Flask服务进行处理，支持多种音频格式
 
 ### Flask 服务独立接口 (@ 5000)
 
-- `GET /health`: 健康检查
-- `POST /whisperx/process`: 异步处理音频文件，返回任务ID。
-- `GET /whisperx/status/{task_id}`: 查询异步任务的状态 (queued, processing, completed, failed)。
-- `GET /whisperx/result/{task_id}`: 获取已完成任务的处理结果。
-- `GET /whisperx/download/{task_id}/{file_type}`: 下载结果文件 (transcription, wordstamps, diarization, speaker)。
-- `GET /whisperx/tasks`: 列出所有已提交的任务。
+#### 1. 健康检查
+**接口：** `GET /health`
+
+**请求示例：**
+```bash
+curl http://localhost:5000/health
+```
+
+**响应：**
+```json
+{
+  "status": "ok",
+  "message": "WhisperX service is running",
+  "timestamp": "2024-01-01 12:00:00"
+}
+```
+
+#### 2. 处理音频文件
+**接口：** `POST /whisperx/process`
+
+**请求示例：**
+```bash
+curl -X POST http://localhost:5000/whisperx/process \
+  -F "file=@audio.wav"
+```
+
+**响应：**
+```json
+{
+  "success": true,
+  "message": "File uploaded successfully, processing started",
+  "task_id": "uuid_task_id",
+  "filename": "audio.wav"
+}
+```
+
+#### 3. 查询任务状态
+**接口：** `GET /whisperx/status/{task_id}`
+
+**请求示例：**
+```bash
+curl http://localhost:5000/whisperx/status/your_task_id
+```
+
+**响应：**
+```json
+{
+  "success": true,
+  "task_id": "uuid_task_id",
+  "status": "completed",
+  "message": "Processing completed successfully",
+  "created_at": 1640995200.0,
+  "filename": "audio.wav",
+  "result": {
+    "success": true,
+    "output_files": [
+      "whisperx_output.json",
+      "wordstamps.json",
+      "diarization.json",
+      "assign_speaker.json"
+    ]
+  }
+}
+```
+
+#### 4. 下载结果文件
+**接口：** `GET /whisperx/download/{task_id}/{file_type}`
+
+**文件类型：**
+- `transcription`: 基础转录结果
+- `wordstamps`: 词级时间戳
+- `diarization`: 说话人分离
+- `speaker`: 说话人分配
+
+**请求示例：**
+```bash
+curl http://localhost:5000/whisperx/download/your_task_id/transcription \
+  --output result.json
+```
+
+#### 5. 列出所有任务
+**接口：** `GET /whisperx/tasks`
+
+**请求示例：**
+```bash
+curl http://localhost:5000/whisperx/tasks
+```
+
+**响应：**
+```json
+{
+  "success": true,
+  "tasks": [
+    {
+      "task_id": "uuid_task_id",
+      "status": "completed",
+      "message": "Processing completed successfully",
+      "created_at": 1640995200.0,
+      "filename": "audio.wav"
+    }
+  ],
+  "total": 1
+}
+```
 
 ## 文件结构
 
@@ -124,22 +309,194 @@ AuraLab-backend/
 
 ## 测试
 
-### 运行集成测试
+### 集成测试
+
+运行所有服务后，可以通过以下方式测试：
+
+#### 1. 健康检查测试
 ```bash
-python test_integration.py
+# 测试Flask服务健康状态
+curl http://localhost:5000/health
+
+# 预期响应：
+# {
+#   "status": "ok",
+#   "message": "WhisperX service is running",
+#   "timestamp": "2024-01-01 12:00:00"
+# }
+```
+
+#### 2. TTS功能测试
+```bash
+# 测试文本转语音
+curl -X POST http://localhost:8888/bluelm/tts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "human",
+    "text": "这是一个测试音频",
+    "vcn": "M24"
+  }' \
+  --output test_output.wav
+
+# 检查生成的音频文件
+ls -la test_output.wav
+```
+
+#### 3. ASR功能测试
+```bash
+# 测试语音转文本（需要准备音频文件）
+curl -X POST http://localhost:8888/bluelm/transcription \
+  -F "file=@test_audio.wav"
+
+# 预期响应：
+# {
+#   "task_id": "generated_task_id_string"
+# }
+
+# 检查下载目录中的结果文件
+ls -la file_io/downloads/
+```
+
+#### 4. AI对话测试
+```bash
+# 测试AI聊天功能
+curl -X POST http://localhost:8888/bluelm/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "你好，请介绍一下自己",
+    "session_id": "test_session_001",
+    "history_messages": []
+  }'
+
+# 预期响应：
+# {
+#   "success": true,
+#   "message": "Chat completed successfully",
+#   "timestamp": "2024-01-01 12:00:00",
+#   "session_id": "test_session_001",
+#   "data": {
+#     "reply": "你好！我是蓝心大模型...",
+#     "role": "assistant",
+#     "messages": [...]
+#   }
+# }
+```
+
+#### 5. WhisperX功能测试
+```bash
+# 通过Go代理接口测试
+curl -X POST http://localhost:8888/whisperx \
+  -F "file=@test_audio.wav"
+
+# 预期响应：
+# {
+#   "task_id": "uuid_generated_task_id"
+# }
+
+# 直接测试Flask服务
+curl -X POST http://localhost:5000/whisperx/process \
+  -F "file=@test_audio.wav"
+
+# 查询任务状态
+curl http://localhost:5000/whisperx/status/your_task_id
+
+# 下载结果文件
+curl http://localhost:5000/whisperx/download/your_task_id/transcription \
+  --output whisperx_result.json
+```
+
+#### 6. 完整工作流测试
+```bash
+#!/bin/bash
+# 完整测试脚本示例
+
+echo "=== 开始集成测试 ==="
+
+# 1. 健康检查
+echo "1. 测试健康检查..."
+curl -s http://localhost:5000/health | jq .
+
+# 2. TTS测试
+echo "2. 测试TTS功能..."
+curl -X POST http://localhost:8888/bluelm/tts \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"short","text":"测试音频","vcn":"M24"}' \
+  --output test.wav
+
+if [ -f "test.wav" ]; then
+  echo "TTS测试成功，音频文件已生成"
+else
+  echo "TTS测试失败"
+fi
+
+# 3. 使用生成的音频测试ASR
+echo "3. 测试ASR功能..."
+ASR_RESULT=$(curl -X POST http://localhost:8888/bluelm/transcription \
+  -F "file=@test.wav" -s)
+echo "ASR结果: $ASR_RESULT"
+
+# 4. AI对话测试
+echo "4. 测试AI对话..."
+curl -X POST http://localhost:8888/bluelm/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"你好"}' -s | jq .
+
+echo "=== 测试完成 ==="
 ```
 
 ### 手动测试
 
-#### 测试 WhisperX 功能
+#### 使用Postman测试
+1. 导入API集合（可创建Postman Collection）
+2. 设置环境变量：
+   - `base_url_go`: http://localhost:8888
+   - `base_url_flask`: http://localhost:5000
+3. 按顺序测试各个接口
+
+#### 使用curl脚本测试
+创建测试脚本 `test_api.sh`：
 ```bash
-curl -X POST -F "file=@test_audio.wav" http://localhost:8888/whisperx
+#!/bin/bash
+# API测试脚本
+
+BASE_URL_GO="http://localhost:8888"
+BASE_URL_FLASK="http://localhost:5000"
+
+# 测试函数
+test_endpoint() {
+    echo "Testing: $1"
+    echo "Command: $2"
+    eval $2
+    echo "---"
+}
+
+# 执行测试
+test_endpoint "Health Check" "curl -s $BASE_URL_FLASK/health | jq ."
+test_endpoint "AI Chat" "curl -X POST $BASE_URL_GO/bluelm/chat -H 'Content-Type: application/json' -d '{\"message\":\"Hello\"}' -s | jq ."
+# 添加更多测试...
 ```
 
-#### 测试健康检查
+### 性能测试
+
+#### 并发测试
 ```bash
-curl http://localhost:5000/health
-curl http://localhost:8888/bluelm/chat -X POST -H "Content-Type: application/json" -d '{"message":"hello"}'
+# 使用ab工具进行并发测试
+ab -n 100 -c 10 http://localhost:5000/health
+
+# 使用wrk进行压力测试
+wrk -t12 -c400 -d30s http://localhost:5000/health
+```
+
+#### 内存和CPU监控
+```bash
+# 监控Go服务
+top -p $(pgrep -f "go run main.go")
+
+# 监控Python服务
+top -p $(pgrep -f "python app.py")
+
+# 查看端口占用
+netstat -tulpn | grep -E ":(5000|8888)"
 ```
 
 ## 故障排除
